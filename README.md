@@ -1,2 +1,2 @@
 # vbox.sys
-VirtualBox Guest Additions video driver for KolibriOS.
+VirtualBox Guest Additions driver for KolibriOS.
