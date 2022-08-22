@@ -26,7 +26,7 @@ proc START c, state, cmdline : dword
         cmp     [state], DRV_ENTRY
         jne     .fail
 
-        DEBUGF  1,"[vboxvid]: Start driver\n"
+        DEBUGF  1,"[vbox]: Start driver\n"
 
         invoke  GetPCIList
         mov     ebx, eax
@@ -40,7 +40,7 @@ proc START c, state, cmdline : dword
         jmp     .find_dev
 
   .dev_found:
-        DEBUGF  1,"[vboxvid]: Device found!\n"
+        DEBUGF  1,"[vbox]: Device found!\n"
 
         ; Get IRQ number and attach handler.
         mov     ebx, eax
@@ -51,15 +51,15 @@ proc START c, state, cmdline : dword
         ; Get vbox IO port.
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.base_addr_0
         and     al, not 0xF
-        DEBUGF  1,"[vboxvid]: Port %x\n", eax
+        DEBUGF  1,"[vbox]: Port %x\n", eax
         mov     word [vbox_device.port], ax
 
         ; Create mapping for MMIO.
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.base_addr_1
         and     al, not 0xF
-        DEBUGF  1,"[vboxvid]: MMIO phy %x\n", eax
+        DEBUGF  1,"[vbox]: MMIO phy %x\n", eax
         invoke  MapIoMem, eax, 0x10000, PG_NOCACHE + PG_SW
-        DEBUGF  1,"[vboxvid]: MMIO virt %x\n", eax
+        DEBUGF  1,"[vbox]: MMIO virt %x\n", eax
         mov     [vbox_device.mmio], eax
 
         ; Allocate space for packets and send if needed.
@@ -96,7 +96,7 @@ proc START c, state, cmdline : dword
         ret
 
   .dev_not_found:
-        DEBUGF  1,"[vboxvid]: Device not found!\n"
+        DEBUGF  1,"[vbox]: Device not found!\n"
   .fail:
         xor     eax, eax
         ret
@@ -128,7 +128,7 @@ endp
 ; in:   eax - pack phys addr
 proc send_pack
         mov     dx, [vbox_device.port]
-        DEBUGF  1,"[vboxvid]: Send pack to port %x data-phys %x\n", dx, eax
+        DEBUGF  1,"[vbox]: Send pack to port %x data-phys %x\n", dx, eax
         out     dx, eax
         ret
 endp
@@ -145,7 +145,7 @@ align 4
 proc vbox_irq_handler
         pushad
 
-        DEBUGF  1,"[vboxvid]: Interrupt\n"
+        DEBUGF  1,"[vbox]: Interrupt\n"
 
         mov     eax, [vbox_device.mmio]
         mov     eax, [eax + 8]
@@ -162,7 +162,7 @@ proc vbox_irq_handler
         call    send_pack
 
         mov     ebx, [vbox_device.display_addr.virt]
-        DEBUGF  1,"[vboxvid]: New %d x %d - %d\n", [ebx + VBOX_DISPLAY_CHANGE.x_res], [ebx + VBOX_DISPLAY_CHANGE.y_res], [ebx + VBOX_DISPLAY_CHANGE.bpp]
+        DEBUGF  1,"[vbox]: New %d x %d - %d\n", [ebx + VBOX_DISPLAY_CHANGE.x_res], [ebx + VBOX_DISPLAY_CHANGE.y_res], [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
 
 ;        mov     eax, [ebx + VBOX_DISPLAY_CHANGE.x_res]
