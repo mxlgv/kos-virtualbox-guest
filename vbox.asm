@@ -185,7 +185,7 @@ end data
 
 include 'inc/peimport.inc'
 
-service_name: db 'vboxvid', 0
+service_name: db 'vbox', 0
 
 vbox_device:
   .port               dw 0
