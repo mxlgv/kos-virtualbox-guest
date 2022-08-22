@@ -19,6 +19,15 @@ include 'inc/pci.inc'
 include 'inc/fdo.inc'
 
 include 'vbox.inc'
+include 'bga.inc'
+
+KOS_DISP_W_OFFSET            = 0x08
+KOS_DISP_H_OFFSET            = 0x0C
+KOS_DISP_CURRENT_LFB_OFFSET  = 0x18
+
+KOS_DISP_W_MIN = 800
+KOS_DISP_H_MIN = 600
+
 
 section '.flat' readable writable executable
 
@@ -65,23 +74,23 @@ proc START c, state, cmdline : dword
         ; Allocate space for packets and send if needed.
         mov     esi, const_vbox_guest_info
         mov     ecx, sizeof.VBOX_GUEST_INFO
-        call    create_pack
-        call    send_pack
+        call    vbox_create_pack
+        vbox_send_pack
 
         mov     esi, const_vbox_guest_caps
         mov     ecx, sizeof.VBOX_GUEST_CAPS
-        call    create_pack
-        call    send_pack
+        call    vbox_create_pack
+        vbox_send_pack
 
         mov     esi, const_vbox_ack
         mov     ecx, sizeof.VBOX_ACK_EVENTS
-        call    create_pack
+        call    vbox_create_pack
         mov     [vbox_device.ack_addr.phys], eax
         mov     [vbox_device.ack_addr.virt], ebx
 
         mov     esi, const_vbox_display
         mov     ecx, sizeof.VBOX_DISPLAY_CHANGE
-        call    create_pack
+        call    vbox_create_pack
         mov     [vbox_device.display_addr.phys], eax
         mov     [vbox_device.display_addr.virt], ebx
 
@@ -103,13 +112,11 @@ proc START c, state, cmdline : dword
 endp
 
 
-; in:   esi - template
-;       ecx - template size
-;
+; in:   esi - pack constant
+;       ecx - pack constant size
 ; out:  ebx - virt
 ;       eax - phys
-
-proc create_pack
+proc vbox_create_pack
         push    ecx
         invoke  AllocPage
         mov     ebx, eax
@@ -124,19 +131,9 @@ proc create_pack
         ret
 endp
 
-
-; in:   eax - pack phys addr
-proc send_pack
-        mov     dx, [vbox_device.port]
-        DEBUGF  1,"[vbox]: Send pack to port %x data-phys %x\n", dx, eax
-        out     dx, eax
-        ret
-endp
-
-
 align 4
 proc service_proc stdcall, ioctl:dword
-        or      eax, -1
+        xor     eax, eax
         ret
 endp
 
@@ -149,28 +146,52 @@ proc vbox_irq_handler
 
         mov     eax, [vbox_device.mmio]
         mov     eax, [eax + 8]
-        test    eax, eax
+        test    eax, VBOX_VMM_EVENT_DISP
         jz      .skip
 
         mov     ebx, [vbox_device.ack_addr.virt]
         mov     [ebx + VBOX_ACK_EVENTS.events], eax
 
         mov     eax, [vbox_device.ack_addr.phys]
-        call    send_pack
+        vbox_send_pack
 
         mov     eax, [vbox_device.display_addr.phys]
-        call    send_pack
+        vbox_send_pack
 
         mov     ebx, [vbox_device.display_addr.virt]
-        DEBUGF  1,"[vbox]: New %d x %d - %d\n", [ebx + VBOX_DISPLAY_CHANGE.x_res], [ebx + VBOX_DISPLAY_CHANGE.y_res], [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
+        mov     edi, [ebx + VBOX_DISPLAY_CHANGE.x_res]
+        mov     esi, [ebx + VBOX_DISPLAY_CHANGE.y_res]
+        mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
-;        mov     eax, [ebx + VBOX_DISPLAY_CHANGE.x_res]
-;        mov     edx, [ebx + VBOX_DISPLAY_CHANGE.y_res]
-;        mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
-;        dec     eax
-;        dec     edx
-;        invoke  SetScreen
+        and     edi, not 0xF
+        and     esi, not 0xF
+
+        cmp     edi, KOS_DISP_W_MIN
+        jl      .skip
+        cmp     esi, KOS_DISP_H_MIN
+        jl      .skip
+        cmp     ecx, VBE_DISPI_BPP_32
+        jnz     .skip
+
+        DEBUGF  1,"[vbox]: new %dx%d %d\n", edi, esi, ecx
+
+        bga_set_video_mode edi, esi, ecx
+
+        invoke  GetDisplay
+
+        mov     ecx, edi
+        shl     ecx, 2
+
+        mov     [eax + KOS_DISP_W_OFFSET], edi
+        mov     [eax + KOS_DISP_H_OFFSET], esi
+        mov     [eax + KOS_DISP_CURRENT_LFB_OFFSET], ecx
+
+        mov     eax, edi
+        mov     edx, esi
+        dec     eax
+        dec     edx
+        invoke  SetScreen
 
   .skip:
         popad

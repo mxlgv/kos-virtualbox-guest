@@ -11,6 +11,7 @@ VBOX_REQUEST_GET_DISPLAY_CHANGE = 51
 VBOX_REQUEST_SET_GUEST_CAPS     = 55
 VBOX_REQUEST_ACK_EVENTS         = 41
 
+VBOX_VMM_EVENT_DISP = 4
 
 struct VBOX_HEADER
         size            dd ?
@@ -74,3 +75,11 @@ struct VBOX_POINTER_SHAPE
         height          dd ?
         data            rb 1
 ends
+
+; in:      eax - pack phys addr
+; corrupt: edx
+macro vbox_send_pack
+{
+        mov     dx, [vbox_device.port]
+        out     dx, eax
+}
