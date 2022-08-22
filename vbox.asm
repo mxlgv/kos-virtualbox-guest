@@ -19,6 +19,7 @@ include 'inc/pci.inc'
 include 'inc/fdo.inc'
 
 include 'vbox.inc'
+include 'bga.inc'
 
 section '.flat' readable writable executable
 
@@ -162,15 +163,47 @@ proc vbox_irq_handler
         call    send_pack
 
         mov     ebx, [vbox_device.display_addr.virt]
-        DEBUGF  1,"[vbox]: New %d x %d - %d\n", [ebx + VBOX_DISPLAY_CHANGE.x_res], [ebx + VBOX_DISPLAY_CHANGE.y_res], [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
+        mov     edi, [ebx + VBOX_DISPLAY_CHANGE.x_res]
+        mov     esi, [ebx + VBOX_DISPLAY_CHANGE.y_res]
+        mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
-;        mov     eax, [ebx + VBOX_DISPLAY_CHANGE.x_res]
-;        mov     edx, [ebx + VBOX_DISPLAY_CHANGE.y_res]
-;        mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
-;        dec     eax
-;        dec     edx
-;        invoke  SetScreen
+        mov     eax, edi
+        and     al, not 0xF
+        mov     edi, eax
+
+        DEBUGF  1,"[vbox]: New %d x %d - %d\n", esi, edi, ecx
+
+      ;  cli
+        bga_set_video_mode edi, esi, ecx
+        sti
+      ;
+        invoke  GetDisplay
+
+      ;  test    edi, edi
+       ; jz      .skip
+      ;  test    esi, esi
+      ;  jz      .skip
+     ;   cmp     [eax + 0x08], edi
+     ;   jnz     .set_screen
+     ;   cmp     [eax + 0x0C], esi
+     ;   jz      .skip
+
+    .set_screen:
+
+        mov     ecx, edi
+        add     ecx, 15
+        and     ecx, not 15
+        shl     ecx, 2
+        mov     dword [eax + 0x08], edi
+        mov     dword [eax + 0x0C], esi
+        mov     [eax + 0x18], ecx
+        mov     eax, edi
+        mov     edx, esi
+
+        dec     eax
+        dec     edx
+        invoke  SetScreen
 
   .skip:
         popad
