@@ -11,6 +11,8 @@ Need [FASM](https://flatassembler.net/). At the output you will get the vbox.sys
 `fasm vbox.asm`
 
 ## Usage
+I highly recommend **closing @taskbar application**. It crashes the OS when changing resolution frequently (should be fixed!)
+
 Copy the driver to the /sys/drivers/ folder. Start **SHELL** and run:
 
 `loaddrv vbox`
