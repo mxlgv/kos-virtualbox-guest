@@ -25,8 +25,8 @@ KOS_DISP_W_OFFSET            = 0x08
 KOS_DISP_H_OFFSET            = 0x0C
 KOS_DISP_CURRENT_LFB_OFFSET  = 0x18
 
-KOS_DISP_W_MIN = 800
-KOS_DISP_H_MIN = 600
+KOS_DISP_W_MIN = 640
+KOS_DISP_H_MIN = 480
 
 
 section '.flat' readable writable executable
@@ -176,7 +176,9 @@ proc vbox_irq_handler
 
         DEBUGF  1,"[vbox]: new %dx%d %d\n", edi, esi, ecx
 
+        cli
         bga_set_video_mode edi, esi, ecx
+        sti
 
         invoke  GetDisplay
 
@@ -189,8 +191,8 @@ proc vbox_irq_handler
 
         mov     eax, edi
         mov     edx, esi
-        dec     eax
-        dec     edx
+        ;dec     eax    ; Need a decrement ? \
+        ;dec     edx    ; Causes a crash at 640x480 resolution!
         invoke  SetScreen
 
   .skip:
@@ -199,12 +201,6 @@ proc vbox_irq_handler
         inc     eax
         ret
 endp
-
-
-data fixups
-end data
-
-include 'inc/peimport.inc'
 
 service_name: db 'vbox', 0
 
@@ -257,3 +253,8 @@ const_vbox_display VBOX_DISPLAY_CHANGE \
          1 \
 
 include_debug_strings
+
+data fixups
+end data
+
+include 'inc/peimport.inc'
