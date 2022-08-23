@@ -35,6 +35,7 @@ KOS_DISP_H_MIN = 480
 section '.flat' readable writable executable
 
 proc START c, state, cmdline : dword
+        push    esi
         cmp     [state], DRV_ENTRY
         jne     .fail
 
@@ -107,16 +108,18 @@ proc START c, state, cmdline : dword
         add     ebx, 12
 
         invoke  RegService, service_name, service_proc
+        pop     esi
         ret
 
   .dev_not_found:
         DEBUGF  1,"[vbox]: Device not found!\n"
   .fail:
+        pop     esi
         xor     eax, eax
         ret
 endp
 
-align 4
+
 ; in:   esi - pack constant
 ;       ecx - pack constant size
 ; out:  ebx - virt
@@ -136,13 +139,13 @@ proc vbox_create_pack
         ret
 endp
 
-align 4
+
 proc service_proc stdcall, ioctl:dword
         xor     eax, eax
         ret
 endp
 
-align 4
+
 proc set_display_res
         mov     ebx, [vbox_device.ack_addr.virt]
         mov     [ebx + VBOX_ACK_EVENTS.events], eax
@@ -193,9 +196,9 @@ proc set_display_res
         ret
 endp
 
-align 4
+
 proc vbox_irq_handler
-        pushad
+        push    ebx esi edi
 
         DEBUGF  1,"[vbox]: Interrupt\n"
 
@@ -207,16 +210,19 @@ proc vbox_irq_handler
         call    set_display_res
 
   .skip:
-        popad
+        pop     edi esi ebx
         xor     eax, eax
         inc     eax
         ret
 endp
 
+
 service_name: db 'vbox', 0
 
+align 4
 vbox_device:
   .port               dw 0
+                      dw 0
   .mmio               dd 0
   .ack_addr.virt      dd 0
   .ack_addr.phys      dd 0
