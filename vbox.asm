@@ -94,6 +94,8 @@ proc START c, state, cmdline : dword
         mov     [vbox_device.display_addr.phys], eax
         mov     [vbox_device.display_addr.virt], ebx
 
+        call    set_display_res
+
         ; Enable interrupts for declared capabilities (enable all).
         xor     eax, eax
         dec     eax
@@ -111,7 +113,7 @@ proc START c, state, cmdline : dword
         ret
 endp
 
-
+align 4
 ; in:   esi - pack constant
 ;       ecx - pack constant size
 ; out:  ebx - virt
@@ -137,18 +139,8 @@ proc service_proc stdcall, ioctl:dword
         ret
 endp
 
-
 align 4
-proc vbox_irq_handler
-        pushad
-
-        DEBUGF  1,"[vbox]: Interrupt\n"
-
-        mov     eax, [vbox_device.mmio]
-        mov     eax, [eax + 8]
-        test    eax, VBOX_VMM_EVENT_DISP
-        jz      .skip
-
+proc set_display_res
         mov     ebx, [vbox_device.ack_addr.virt]
         mov     [ebx + VBOX_ACK_EVENTS.events], eax
 
@@ -164,8 +156,8 @@ proc vbox_irq_handler
         mov     esi, [ebx + VBOX_DISPLAY_CHANGE.y_res]
         mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
-        and     edi, not 0xF
-        and     esi, not 0xF
+        and     edi, not 0xF    ; Making it a multiple of 16
+        ;and     esi, not 0xF   ; Needless?
 
         cmp     edi, KOS_DISP_W_MIN
         jl      .skip
@@ -194,6 +186,22 @@ proc vbox_irq_handler
         ;dec     eax    ; Need a decrement ? \
         ;dec     edx    ; Causes a crash at 640x480 resolution!
         invoke  SetScreen
+  .skip:
+        ret
+endp
+
+align 4
+proc vbox_irq_handler
+        pushad
+
+        DEBUGF  1,"[vbox]: Interrupt\n"
+
+        mov     eax, [vbox_device.mmio]
+        mov     eax, [eax + 8]
+        test    eax, VBOX_VMM_EVENT_DISP
+        jz      .skip
+
+        call    set_display_res
 
   .skip:
         popad
