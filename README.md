@@ -17,4 +17,4 @@ Copy the driver to the /sys/drivers/ folder. Start **SHELL** and run:
 
 `loaddrv vbox`
 
-To load the driver automatically add `/SYS/LOADDRV VBOX 1` to **/sys/settings/autorun.dat**
+To load the driver automatically add `/SYS/LOADDRV VBOX 0` to **/sys/settings/autorun.dat**
