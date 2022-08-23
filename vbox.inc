@@ -3,7 +3,7 @@
 ;; Copyright (C) KolibriOS team 2004-2022. All rights reserved. ;;
 ;; Distributed under terms of the GNU General Public License    ;;
 ;;                                                              ;;
-;;         Writen by Maxim Logaev (turboca2001)                 ;;
+;;         Writen by Maxim Logaev (turbocat2001)                ;;
 ;;                      2022 year                               ;;
 ;;                                                              ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
