@@ -35,7 +35,7 @@ KOS_DISP_H_MIN = 480
 section '.flat' readable writable executable
 
 proc START c, state, cmdline : dword
-        push    esi
+        push    ebx esi edi
         cmp     [state], DRV_ENTRY
         jne     .fail
 
@@ -71,68 +71,65 @@ proc START c, state, cmdline : dword
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.base_addr_1
         and     al, not 0xF
         DEBUGF  1,"[vbox]: MMIO phy %x\n", eax
-        invoke  MapIoMem, eax, 0x10000, PG_NOCACHE + PG_SW
+        invoke  MapIoMem, eax, 0x1000, PG_NOCACHE + PG_SW
         DEBUGF  1,"[vbox]: MMIO virt %x\n", eax
         mov     [vbox_device.mmio], eax
 
         ; Allocate space for packets and send if needed.
         mov     esi, const_vbox_guest_info
-        mov     ecx, sizeof.VBOX_GUEST_INFO
+        mov     edi, sizeof.VBOX_GUEST_INFO/4
         call    vbox_create_pack
         vbox_send_pack
 
         mov     esi, const_vbox_guest_caps
-        mov     ecx, sizeof.VBOX_GUEST_CAPS
+        mov     edi, sizeof.VBOX_GUEST_CAPS/4
         call    vbox_create_pack
         vbox_send_pack
 
         mov     esi, const_vbox_ack
-        mov     ecx, sizeof.VBOX_ACK_EVENTS
+        mov     edi, sizeof.VBOX_ACK_EVENTS/4
         call    vbox_create_pack
         mov     [vbox_device.ack_addr.phys], eax
         mov     [vbox_device.ack_addr.virt], ebx
 
         mov     esi, const_vbox_display
-        mov     ecx, sizeof.VBOX_DISPLAY_CHANGE
+        mov     edi, sizeof.VBOX_DISPLAY_CHANGE/4
         call    vbox_create_pack
         mov     [vbox_device.display_addr.phys], eax
         mov     [vbox_device.display_addr.virt], ebx
-
-        call    set_display_res
 
         ; Enable interrupts for declared capabilities (enable all).
         xor     eax, eax
         dec     eax
         mov     ebx, [vbox_device.mmio]
         mov     [ebx + 12], eax
-        add     ebx, 12
+
+        call    set_display_res
 
         invoke  RegService, service_name, service_proc
-        pop     esi
+        pop     edi esi ebx
         ret
 
   .dev_not_found:
         DEBUGF  1,"[vbox]: Device not found!\n"
   .fail:
-        pop     esi
+        pop     edi esi ebx
         xor     eax, eax
         ret
 endp
 
 
 ; in:   esi - pack constant
-;       ecx - pack constant size
-; out:  ebx - virt
-;       eax - phys
+;       edi - pack constant size in blocks of 4 bytes
+; out:  eax - phys
+;       ebx - virt
 proc vbox_create_pack
-        push    ecx
         invoke  AllocPage
         mov     ebx, eax
         invoke  MapIoMem, ebx, 0x1000, PG_NOCACHE + PG_SW
 
+        mov     ecx, edi
         mov     edi, eax
-        pop     ecx
-        shr     ecx, 2
         rep movsd
 
         xchg    eax, ebx
@@ -147,24 +144,15 @@ endp
 
 
 proc set_display_res
-        mov     ebx, [vbox_device.ack_addr.virt]
-        mov     [ebx + VBOX_ACK_EVENTS.events], eax
-
-        mov     eax, [vbox_device.ack_addr.phys]
-        vbox_send_pack
-
+        ; Request display change information.
         mov     eax, [vbox_device.display_addr.phys]
         vbox_send_pack
-
         mov     ebx, [vbox_device.display_addr.virt]
-
         mov     edi, [ebx + VBOX_DISPLAY_CHANGE.x_res]
         mov     esi, [ebx + VBOX_DISPLAY_CHANGE.y_res]
         mov     ecx, [ebx + VBOX_DISPLAY_CHANGE.bpp]
 
-        and     edi, not 0xF    ; Making it a multiple of 16
-        ;and     esi, not 0xF   ; Needless?
-
+        ; Skip if mode is less than minimum.
         cmp     edi, KOS_DISP_W_MIN
         jl      .skip
         cmp     esi, KOS_DISP_H_MIN
@@ -174,14 +162,15 @@ proc set_display_res
 
         DEBUGF  1,"[vbox]: new %dx%d %d\n", edi, esi, ecx
 
+        ; Change video mode using Bochs Graphics Adapter
         cli
         bga_set_video_mode edi, esi, ecx
         sti
 
+        ; Get address of "display" structure in kernel.
         invoke  GetDisplay
-
         mov     ecx, edi
-        shl     ecx, 2
+        shl     ecx, BSF (VBE_DISPI_BPP_32/8) ; calculate scanline (x_res*VBE_DISPI_BPP_32/8)
 
         mov     [eax + KOS_DISP_W_OFFSET], edi
         mov     [eax + KOS_DISP_H_OFFSET], esi
@@ -189,23 +178,31 @@ proc set_display_res
 
         mov     eax, edi
         mov     edx, esi
-        ;dec     eax    ; Need a decrement ? \
-        ;dec     edx    ; Causes a crash at 640x480 resolution!
+        dec     eax
+        dec     edx
         invoke  SetScreen
   .skip:
         ret
 endp
 
 
-proc vbox_irq_handler
+proc vbox_irq_handler stdcall
         push    ebx esi edi
 
         DEBUGF  1,"[vbox]: Interrupt\n"
 
         mov     eax, [vbox_device.mmio]
         mov     eax, [eax + 8]
+
+        ; Skip non-resolution events
         test    eax, VBOX_VMM_EVENT_DISP
         jz      .skip
+
+        ; Event acknowledgment
+        mov     ebx, [vbox_device.ack_addr.virt]
+        mov     [ebx + VBOX_ACK_EVENTS.events], eax
+        mov     eax, [vbox_device.ack_addr.phys]
+        vbox_send_pack
 
         call    set_display_res
 
@@ -229,6 +226,7 @@ vbox_device:
   .display_addr.virt  dd 0
   .display_addr.phys  dd 0
 
+; Prepared packages for sending requests to virtual box
 const_vbox_guest_info VBOX_GUEST_INFO \
         <sizeof.VBOX_GUEST_INFO, \
          VBOX_REQUEST_HEADER_VERSION, \
