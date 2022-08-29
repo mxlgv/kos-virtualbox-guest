@@ -24,13 +24,8 @@ include 'inc/fdo.inc'
 include 'vbox.inc'
 include 'bga.inc'
 
-KOS_DISP_W_OFFSET            = 0x08
-KOS_DISP_H_OFFSET            = 0x0C
-KOS_DISP_CURRENT_LFB_OFFSET  = 0x18
-
 KOS_DISP_W_MIN = 640
 KOS_DISP_H_MIN = 480
-
 
 section '.flat' readable writable executable
 
@@ -172,9 +167,8 @@ proc set_display_res
         mov     ecx, edi
         shl     ecx, BSF (VBE_DISPI_BPP_32/8) ; calculate scanline (x_res*VBE_DISPI_BPP_32/8)
 
-        mov     [eax + KOS_DISP_W_OFFSET], edi
-        mov     [eax + KOS_DISP_H_OFFSET], esi
-        mov     [eax + KOS_DISP_CURRENT_LFB_OFFSET], ecx
+        mov     [eax + DISPLAY.width], edi
+        mov     [eax + DISPLAY.height], esi
 
         mov     eax, edi
         mov     edx, esi
