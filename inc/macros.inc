@@ -43,6 +43,49 @@ struct IOCTL
         out_size        dd ?
 ends
 
+struct  RWSEM
+        wait_list       LHEAD
+        count           dd ?
+ends
+
+struct  DISPLAY
+        x               dd ?
+        y               dd ?
+        width           dd ?
+        height          dd ?
+        bits_per_pixel  dd ?
+        vrefresh        dd ?
+        current_lfb     dd ?
+        lfb_pitch       dd ?
+
+        win_map_lock    RWSEM
+        win_map         dd ?
+        win_map_pitch   dd ?
+        win_map_size    dd ?
+
+        modes           dd ?
+        ddev            dd ?
+        connector       dd ?
+        crtc            dd ?
+
+        cr_list.next    dd ?
+        cr_list.prev    dd ?
+
+        cursor          dd ?
+
+        init_cursor     dd ?
+        select_cursor   dd ?
+        show_cursor     dd ?
+        move_cursor     dd ?
+        restore_cursor  dd ?
+        disable_mouse   dd ?
+        mask_seqno      dd ?
+        check_mouse     dd ?
+        check_m_pixel   dd ?
+
+        bytes_per_pixel dd ?
+ends
+
 ; The following macro assume that we are on uniprocessor machine.
 ; Serious work is needed for multiprocessor machines.
 macro spin_lock_irqsave spinlock
