@@ -20,6 +20,7 @@ jobs:
 
       - name: Get FASM
         run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
           curl https://flatassembler.net/fasmw17330.zip -O fasmw.zip
           7z x fasmw.zip
         shell: powershell
