@@ -1,5 +1,7 @@
 # kos-virtualbox-guest
 
+[![Build](https://github.com/turbocat2001/kos-virtualbox-guest/actions/workflows/build.yml/badge.svg)](https://github.com/acidicMercury8/kos-virtualbox-guest/actions/workflows/build.yml)
+
 VirtualBox Guest Additions driver for __KolibriOS__
 
 ## Features
