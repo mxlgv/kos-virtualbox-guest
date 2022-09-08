@@ -1,0 +1,32 @@
+name: Building
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build:
+    name: 'Building'
+
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Fasm
+        uses: stevenwdv/setup-fasm@v1
+
+      - name: Build driver
+        run: |
+          fasm vbox.asm
+
+      - name: Upload driver
+        uses: actions/upload-artifact@v3
+        with:
+          name: driver
+          path: vbox.sys
