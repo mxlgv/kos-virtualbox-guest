@@ -51,5 +51,5 @@ macro bga_set_video_mode w, h, bpp
         bga_write_reg VBE_DISPI_INDEX_XRES, w
         bga_write_reg VBE_DISPI_INDEX_YRES, h
         bga_write_reg VBE_DISPI_INDEX_BPP, bpp
-        bga_write_reg VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED ;or VBE_DISPI_LFB_ENABLED
+        bga_write_reg VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED or VBE_DISPI_LFB_ENABLED
 }
