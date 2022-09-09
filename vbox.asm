@@ -50,6 +50,9 @@ proc START c, state, cmdline : dword
   .dev_found:
         DEBUGF  1,"[vbox]: Device found!\n"
 
+        invoke  GetDisplay
+        mov     [kos_display_ptr], eax
+
         ; Get IRQ number and attach handler.
         mov     ebx, eax
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.interrupt_line
@@ -92,6 +95,16 @@ proc START c, state, cmdline : dword
         call    vbox_create_pack
         mov     [vbox_device.display_addr.phys], eax
         mov     [vbox_device.display_addr.virt], ebx
+
+        mov     esi, const_vbox_mouse
+        mov     edi, sizeof.VBOX_MOUSE/4
+        call    vbox_create_pack
+        mov     [vbox_device.mouse_addr.phys], eax
+        mov     [vbox_device.mouse_addr.virt], ebx
+        vbox_send_pack
+
+        mov     eax, [vbox_device.mouse_addr.virt]
+        mov     [eax + VBOX_MOUSE.header.request_type], VBOX_REQUEST_GET_MOUSE
 
         ; Enable interrupts for declared capabilities (enable all).
         xor     eax, eax
@@ -162,11 +175,10 @@ proc set_display_res
         bga_set_video_mode edi, esi, ecx
         sti
 
-        ; Get address of "display" structure in kernel.
-        invoke  GetDisplay
         mov     ecx, edi
         shl     ecx, BSF (VBE_DISPI_BPP_32/8) ; calculate scanline (x_res*VBE_DISPI_BPP_32/8)
 
+        mov     eax, [kos_display_ptr]
         mov     [eax + DISPLAY.width], edi
         mov     [eax + DISPLAY.height], esi
 
@@ -175,31 +187,74 @@ proc set_display_res
         dec     eax
         dec     edx
         invoke  SetScreen
+
   .skip:
         ret
 endp
 
+proc set_mouse_pos
+;        mov     eax, [vbox_device.mouse_addr.phys]
+;        vbox_send_pack
+;        mov     ebx, [vbox_device.mouse_addr.virt]
+;        mov     eax, [ebx + VBOX_MOUSE.x];
+;        mov     edx, [ebx + VBOX_MOUSE.y];
+;
+;        mov     ebx, [kos_display_ptr]
+;
+;        imul    eax, [ebx + DISPLAY.width]
+;        shr     eax, 16
+;
+;        imul    edx, [ebx + DISPLAY.height]
+;        shr     edx, 16
+;
+;        push    eax edx
+;
+;        mov     ecx, [old_x]
+;        mov     ebx, [old_y]
+;
+;        sub     ecx, eax
+;        sub     ebx, edx
+;
+;        neg     ebx
+;
+;        DEBUGF  1,"[vbox]: MOUSE POS X=%d Y=%d\n", ecx, ebx
+;
+;        ;xor     ebx, ebx
+;        invoke  SetMouseData, 0, ecx, ebx, 0,0
+;
+;        pop     edx eax
+;
+;        mov     [old_x], eax
+;        mov     [old_y], edx
+
+    ret
+endp
 
 proc vbox_irq_handler stdcall
         push    ebx esi edi
 
         DEBUGF  1,"[vbox]: Interrupt\n"
 
-        mov     eax, [vbox_device.mmio]
-        mov     eax, [eax + 8]
+        mov     edi, [vbox_device.mmio]
+        mov     edi, [edi + 8]
 
-        ; Skip non-resolution events
-        test    eax, VBOX_VMM_EVENT_DISP
+        test    edi, edi
         jz      .skip
 
         ; Event acknowledgment
         mov     ebx, [vbox_device.ack_addr.virt]
-        mov     [ebx + VBOX_ACK_EVENTS.events], eax
+        mov     [ebx + VBOX_ACK_EVENTS.events], edi
         mov     eax, [vbox_device.ack_addr.phys]
         vbox_send_pack
 
-        call    set_display_res
+        test    edi, VBOX_VMM_EVENT_MOUSE
+        jz      .disp_event
+        call    set_mouse_pos
 
+  .disp_event:
+        test    edi, VBOX_VMM_EVENT_DISP
+        jz      .skip
+        call    set_display_res
   .skip:
         pop     edi esi ebx
         xor     eax, eax
@@ -219,6 +274,10 @@ vbox_device:
   .ack_addr.phys      dd 0
   .display_addr.virt  dd 0
   .display_addr.phys  dd 0
+  .mouse_addr.virt    dd 0
+  .mouse_addr.phys    dd 0
+
+kos_display_ptr: dd ?
 
 ; Prepared packages for sending requests to virtual box
 const_vbox_guest_info VBOX_GUEST_INFO \
@@ -259,7 +318,18 @@ const_vbox_display VBOX_DISPLAY_CHANGE \
          0, \
          0, \
          0, \
-         1 \
+         1
+
+const_vbox_mouse VBOX_MOUSE \
+        <sizeof.VBOX_MOUSE, \
+         VBOX_REQUEST_HEADER_VERSION, \
+         VBOX_REQUEST_SET_MOUSE, \
+         0, \
+         0, \
+         0>, \
+         VBOX_ABS_MOUSE_WANT OR VBOX_ABS_MOUSE_POS, \
+         0,  \
+         0
 
 include_debug_strings
 
