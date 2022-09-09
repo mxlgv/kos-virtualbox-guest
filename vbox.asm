@@ -50,6 +50,10 @@ proc START c, state, cmdline : dword
   .dev_found:
         DEBUGF  1,"[vbox]: Device found!\n"
 
+        ; Get address of "display" structure in kernel.
+        invoke  GetDisplay
+        mov     [kos_display_ptr], eax
+
         ; Get IRQ number and attach handler.
         mov     ebx, eax
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.interrupt_line
@@ -162,11 +166,10 @@ proc set_display_res
         bga_set_video_mode edi, esi, ecx
         sti
 
-        ; Get address of "display" structure in kernel.
-        invoke  GetDisplay
         mov     ecx, edi
         shl     ecx, BSF (VBE_DISPI_BPP_32/8) ; calculate scanline (x_res*VBE_DISPI_BPP_32/8)
 
+        mov     eax, [kos_display_ptr]
         mov     [eax + DISPLAY.width], edi
         mov     [eax + DISPLAY.height], esi
 
@@ -219,6 +222,8 @@ vbox_device:
   .ack_addr.phys      dd 0
   .display_addr.virt  dd 0
   .display_addr.phys  dd 0
+
+kos_display_ptr:    dd ?
 
 ; Prepared packages for sending requests to virtual box
 const_vbox_guest_info VBOX_GUEST_INFO \
