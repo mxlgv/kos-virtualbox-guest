@@ -27,6 +27,9 @@ include 'bga.inc'
 KOS_DISP_W_MIN = 640
 KOS_DISP_H_MIN = 480
 
+KOS_DISP_W_MAX = 3840
+KOS_DISP_H_MAX = 2160
+
 section '.flat' readable writable executable
 
 proc START c, state, cmdline : dword
@@ -34,7 +37,7 @@ proc START c, state, cmdline : dword
         cmp     [state], DRV_ENTRY
         jne     .fail
 
-        DEBUGF  1,"[vbox]: Start driver\n"
+        DEBUGF  2,"[vbox]: Start driver\n"
 
         invoke  GetPCIList
         mov     ebx, eax
@@ -48,7 +51,7 @@ proc START c, state, cmdline : dword
         jmp     .find_dev
 
   .dev_found:
-        DEBUGF  1,"[vbox]: Device found!\n"
+        DEBUGF  2,"[vbox]: Device found!\n"
 
         ; Get address of "display" structure in kernel.
         invoke  GetDisplay
@@ -110,7 +113,7 @@ proc START c, state, cmdline : dword
         ret
 
   .dev_not_found:
-        DEBUGF  1,"[vbox]: Device not found!\n"
+        DEBUGF  2,"[vbox]: Device not found!\n"
   .fail:
         pop     edi esi ebx
         xor     eax, eax
@@ -153,9 +156,13 @@ proc set_display_res
 
         ; Skip if mode is less than minimum.
         cmp     edi, KOS_DISP_W_MIN
-        jl      .skip
+        jb      .skip
         cmp     esi, KOS_DISP_H_MIN
-        jl      .skip
+        jb      .skip
+        cmp     edi, KOS_DISP_W_MAX
+        ja     .skip
+        cmp     esi, KOS_DISP_W_MAX
+        ja     .skip
         cmp     ecx, VBE_DISPI_BPP_32
         jnz     .skip
 
