@@ -1,10 +1,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                                                              ;;
-;; Copyright (C) KolibriOS team 2004-2022. All rights reserved. ;;
+;; Copyright (C) KolibriOS team 2004-2023. All rights reserved. ;;
 ;; Distributed under terms of the GNU General Public License    ;;
 ;;                                                              ;;
 ;;         Writen by Maxim Logaev (turbocat2001)                ;;
-;;                      2022 year                               ;;
+;;                      2022-2023 year                          ;;
 ;;                                                              ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -13,7 +13,7 @@ entry START
 
 DEBUG                   = 1
 __DEBUG__               = 1
-__DEBUG_LEVEL__         = 1
+__DEBUG_LEVEL__         = 2
 
 include 'inc/proc32.inc'
 include 'inc/struct.inc'
@@ -67,7 +67,7 @@ proc START c, state, cmdline : dword
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.base_addr_0
         and     al, not 0xF
         DEBUGF  1,"[vbox]: Port %x\n", eax
-        mov     word [vbox_device.port], ax
+        mov     [vbox_device.port], ax
 
         ; Create mapping for MMIO.
         invoke  PciRead32, dword [ebx + PCIDEV.bus], dword [ebx + PCIDEV.devfn], PCI_header00.base_addr_1
@@ -77,28 +77,24 @@ proc START c, state, cmdline : dword
         DEBUGF  1,"[vbox]: MMIO virt %x\n", eax
         mov     [vbox_device.mmio], eax
 
-        ; Allocate space for packets and send if needed.
-        mov     esi, const_vbox_guest_info
-        mov     edi, sizeof.VBOX_GUEST_INFO/4
-        call    vbox_create_pack
+        ; Sending packets for initialization
+        mov     eax, vbox_guest_info
+        invoke  GetPhysAddr
         vbox_send_pack
 
-        mov     esi, const_vbox_guest_caps
-        mov     edi, sizeof.VBOX_GUEST_CAPS/4
-        call    vbox_create_pack
+        mov     eax, vbox_guest_caps
+        invoke  GetPhysAddr
         vbox_send_pack
 
-        mov     esi, const_vbox_ack
-        mov     edi, sizeof.VBOX_ACK_EVENTS/4
-        call    vbox_create_pack
+        mov     eax, vbox_ack
+        mov     [vbox_device.ack_addr.virt], eax
+        invoke  GetPhysAddr
         mov     [vbox_device.ack_addr.phys], eax
-        mov     [vbox_device.ack_addr.virt], ebx
 
-        mov     esi, const_vbox_display
-        mov     edi, sizeof.VBOX_DISPLAY_CHANGE/4
-        call    vbox_create_pack
+        mov     eax, vbox_display
+        mov     [vbox_device.display_addr.virt], eax
+        invoke  GetPhysAddr
         mov     [vbox_device.display_addr.phys], eax
-        mov     [vbox_device.display_addr.virt], ebx
 
         ; Enable interrupts for declared capabilities (enable all).
         xor     eax, eax
@@ -121,26 +117,9 @@ proc START c, state, cmdline : dword
 endp
 
 
-; in:   esi - pack constant
-;       edi - pack constant size in blocks of 4 bytes
-; out:  eax - phys
-;       ebx - virt
-proc vbox_create_pack
-        invoke  AllocPage
-        mov     ebx, eax
-        invoke  MapIoMem, ebx, 0x1000, PG_NOCACHE + PG_SW
-
-        mov     ecx, edi
-        mov     edi, eax
-        rep movsd
-
-        xchg    eax, ebx
-        ret
-endp
-
-
 proc service_proc stdcall, ioctl:dword
         xor     eax, eax
+        dec     eax
         ret
 endp
 
@@ -160,12 +139,18 @@ proc set_display_res
         cmp     esi, KOS_DISP_H_MIN
         jb      .skip
         cmp     edi, KOS_DISP_W_MAX
-        ja     .skip
+        ja      .skip
         cmp     esi, KOS_DISP_W_MAX
-        ja     .skip
+        ja      .skip
         cmp     ecx, VBE_DISPI_BPP_32
+        jz      .cont
+        cmp     ecx, VBE_DISPI_BPP_24
+        jz      .cont
+        cmp     ecx, VBE_DISPI_BPP_16
+        jz      .cont
+        cmp     ecx, VBE_DISPI_BPP_8
         jnz     .skip
-
+  .cont:
         DEBUGF  1,"[vbox]: new %dx%d %d\n", edi, esi, ecx
 
         ; Change video mode using Bochs Graphics Adapter
@@ -173,12 +158,17 @@ proc set_display_res
         bga_set_video_mode edi, esi, ecx
         sti
 
-        mov     ecx, edi
-        shl     ecx, BSF (VBE_DISPI_BPP_32/8) ; calculate scanline (x_res*VBE_DISPI_BPP_32/8)
+        mov     ebx, ecx
+        ; Calculate scanline (x_res*bpp/8)
+        shr     ecx, BSF 8
+        mov     eax, edi
+        mul     ecx
+        mov     ecx, eax
 
         mov     eax, [kos_display_ptr]
         mov     [eax + DISPLAY.width], edi
         mov     [eax + DISPLAY.height], esi
+        mov     [eax + DISPLAY.bits_per_pixel], ebx
 
         mov     eax, edi
         mov     edx, esi
@@ -218,22 +208,21 @@ proc vbox_irq_handler stdcall
 endp
 
 
-service_name: db 'vbox', 0
+service_name:           db 'VBOX', 0
+version_str:            db '1.1', 0
 
 align 4
 vbox_device:
-  .port               dw 0
-                      dw 0
-  .mmio               dd 0
-  .ack_addr.virt      dd 0
-  .ack_addr.phys      dd 0
-  .display_addr.virt  dd 0
-  .display_addr.phys  dd 0
+  .port                 dw 0
+  .mmio                 dd 0
+  .ack_addr.virt        dd 0
+  .ack_addr.phys        dd 0
+  .display_addr.virt    dd 0
+  .display_addr.phys    dd 0
 
-kos_display_ptr:    dd ?
-
+kos_display_ptr:        dd ?
 ; Prepared packages for sending requests to virtual box
-const_vbox_guest_info VBOX_GUEST_INFO \
+vbox_guest_info VBOX_GUEST_INFO \
         <sizeof.VBOX_GUEST_INFO, \
          VBOX_REQUEST_HEADER_VERSION, \
          VBOX_VMM_REPORT_GUEST_INFO, \
@@ -243,7 +232,7 @@ const_vbox_guest_info VBOX_GUEST_INFO \
          VBOX_VMMDEV_VERSION, \
          0
 
-const_vbox_guest_caps VBOX_GUEST_CAPS \
+vbox_guest_caps VBOX_GUEST_CAPS \
         <sizeof.VBOX_GUEST_CAPS, \
          VBOX_REQUEST_HEADER_VERSION, \
          VBOX_REQUEST_SET_GUEST_CAPS, \
@@ -252,7 +241,7 @@ const_vbox_guest_caps VBOX_GUEST_CAPS \
          0>, \
          1 SHL 2
 
-const_vbox_ack VBOX_ACK_EVENTS \
+vbox_ack VBOX_ACK_EVENTS \
         <sizeof.VBOX_ACK_EVENTS, \
          VBOX_REQUEST_HEADER_VERSION, \
          VBOX_REQUEST_ACK_EVENTS, \
@@ -261,7 +250,7 @@ const_vbox_ack VBOX_ACK_EVENTS \
          0>, \
          0
 
-const_vbox_display VBOX_DISPLAY_CHANGE \
+vbox_display VBOX_DISPLAY_CHANGE \
         <sizeof.VBOX_DISPLAY_CHANGE, \
          VBOX_REQUEST_HEADER_VERSION, \
          VBOX_REQUEST_GET_DISPLAY_CHANGE, \
