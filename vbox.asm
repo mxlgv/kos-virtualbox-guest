@@ -3,7 +3,7 @@
 ;; Copyright (C) KolibriOS team 2004-2023. All rights reserved. ;;
 ;; Distributed under terms of the GNU General Public License    ;;
 ;;                                                              ;;
-;;         Writen by Maxim Logaev (turbocat2001)                ;;
+;;         Written by Maxim Logaev (turbocat2001)               ;;
 ;;                      2022-2023 year                          ;;
 ;;                                                              ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -161,9 +161,7 @@ proc set_display_res
         mov     ebx, ecx
         ; Calculate scanline (x_res*bpp/8)
         shr     ecx, BSF 8
-        mov     eax, edi
-        mul     ecx
-        mov     ecx, eax
+        imul    ecx, edi
 
         mov     eax, [kos_display_ptr]
         mov     [eax + DISPLAY.width], edi
