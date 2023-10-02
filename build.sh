@@ -26,7 +26,8 @@ if [ ! -e "$IMG" ]; then
 fi
 
 fasm vbox.asm
-kpack /nologo /driver $DRV
+EXENAME=$DRV fasm pestrip.asm $DRV
+kpack $DRV
 mcopy -D o -i $IMG $DRV ::drivers/$DRV
 
 echo -e "Done.\r"
